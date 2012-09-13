@@ -15,7 +15,6 @@ public class Subscription {
     private Queue queue;
     private QueueListener listener;
     private Message lastMessage;
-    private Date lastTransmissionDate;
     private boolean isConsuming;
 
     public Subscription(QueueListener listener, Queue queue) {
@@ -39,15 +38,7 @@ public class Subscription {
     public void setLastMessage(Message lastMessage) {
         this.lastMessage = lastMessage;
     }
-
-    public Date getLastTransmissionDate() {
-        return lastTransmissionDate;
-    }
-
-    public void setLastTransmissionDate(Date lastTransmissionDate) {
-        this.lastTransmissionDate = lastTransmissionDate;
-    }
-
+    
     public boolean isIsConsuming() {
         return isConsuming;
     }
@@ -64,15 +55,13 @@ public class Subscription {
         this.queue = queue;
     }
 
-    public void reset() {
+    public void dispose() {
         isConsuming = false;
         lastMessage = null;
-        lastTransmissionDate = null;
     }
 
     void startConsumingMessage(Message message) {
         isConsuming = true;
         lastMessage = message;
-        lastTransmissionDate = new Date();
     }
 }

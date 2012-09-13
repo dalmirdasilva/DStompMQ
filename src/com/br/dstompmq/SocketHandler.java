@@ -73,9 +73,8 @@ public class SocketHandler extends AbstractReceiver implements QueueListener, Au
                     transmit(Command.ERROR, null, "Transactions not supported yet.");
                 } else if (command == Command.SEND) {
                     String destination = (String) headers.get("destination");
-                    System.out.println("SEND received. Destination: " + destination);
-                    Message message = new Message(frame.getBody());
-                    queueManager.offer(destination, message);
+                    Message message = getMessageFromFrame(frame);
+                    queueManager.addMessage(destination, message);
                 } else if (command == Command.SUBSCRIBE) {
                     System.out.println("SUBSCRIBE received.");
                     String queueName = (String) headers.get("destination");
@@ -90,16 +89,21 @@ public class SocketHandler extends AbstractReceiver implements QueueListener, Au
                 } else if (command == Command.ACK) {
                     System.out.println("ACK received.");
                     String subscriptionId = (String) headers.get("subscription");
-                    queueManager.ack(makeSubscriptionIdUnique(subscriptionId));
+                    queueManager.ackMessage(makeSubscriptionIdUnique(subscriptionId));
                 } else if (command == Command.NACK) {
                     System.out.println("NACK received.");
                     String subscriptionId = (String) headers.get("subscription");
-                    queueManager.nack(makeSubscriptionIdUnique(subscriptionId));
+                    queueManager.nakcMessage(makeSubscriptionIdUnique(subscriptionId));
                 } else {
                     transmit(Command.ERROR, null, "Cannot understand the command.");
                 }
             }
         }
+    }
+    
+    private Message getMessageFromFrame(Frame frame) {
+        int maxRedeliveries = Integer.parseInt(frame.getHeader().get("max-redeliveries"));
+        return new Message(frame.getBody(), maxRedeliveries);
     }
     
     private String makeSubscriptionIdUnique(String subscriptionId) {

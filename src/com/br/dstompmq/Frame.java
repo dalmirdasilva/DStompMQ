@@ -16,13 +16,6 @@ public class Frame {
         this.body = body;
     }
 
-    /**
-     * Gets the frame body. 
-     * 
-     * If you 
-     * 
-     * @return 
-     */
     public String getBody() {
         return body;
     }
