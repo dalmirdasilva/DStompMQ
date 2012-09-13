@@ -1,7 +1,6 @@
 
 package com.br.dstompmq;
 
-import java.sql.Time;
 import java.util.Date;
 
 /**

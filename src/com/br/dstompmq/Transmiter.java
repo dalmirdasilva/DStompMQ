@@ -55,7 +55,6 @@ public class Transmiter {
         }
 
         message.append("\000");
-        System.out.println("Transmiting message: " + message);
         out.write(message.toString().getBytes(Command.ENCODING));
         out.flush();
     }

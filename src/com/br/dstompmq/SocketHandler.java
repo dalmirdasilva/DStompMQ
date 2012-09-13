@@ -24,89 +24,105 @@ public class SocketHandler extends AbstractReceiver implements QueueListener, Au
         clientSocket.close();
     }
 
+    private void connect(FrameHeader headers) throws IOException {
+        String login = (String) headers.get(FrameHeader.LOGIN_ENTRY_NAME);
+        String passcode = (String) headers.get(FrameHeader.PASSCODE_ENTRY_NAME);
+        try {
+            clientToken = Authenticator.connect(login, passcode);
+            FrameHeader header = new FrameHeader();
+            header.put(FrameHeader.SESSION_ENTRY_NAME, String.valueOf(this.hashCode()));
+            transmit(Command.CONNECTED, header, null);
+            setAuthenticated(true);
+        } catch (LoginException e) {
+            transmit(Command.ERROR, null, e.getMessage());
+        }
+    }
+
+    private void disconnect(FrameHeader headers) throws IOException {
+        if (headers != null) {
+            String receipt = (String) headers.get(FrameHeader.RECEIPT_ENTRY_NAME);
+            if (receipt != null) {
+                FrameHeader header = new FrameHeader();
+                header.put(FrameHeader.RECEIPT_ID_ENTRY_NAME, receipt);
+                transmit(Command.RECEIPT, header, null);
+            }
+        }
+    }
+
+    private void handleFrame(Frame frame) throws IOException {
+
+        QueueManager queueManager = QueueManager.getInstance();
+        Command command = frame.getCommand();
+        FrameHeader headers = frame.getHeader();
+
+        try {
+            if (command == Command.COMMIT || command == Command.ABORT || command == Command.BEGIN) {
+                
+                transmit(Command.ERROR, null, "Transactions are not supported yet.");
+            } else if (command == Command.SEND) {
+              
+                String destination = (String) headers.get(FrameHeader.DESTINATION_ENTRY_NAME);
+                Message message = makeMessageFromFrame(frame);
+                queueManager.addMessage(destination, message);
+            } else if (command == Command.SUBSCRIBE) {
+
+                String queueName = (String) headers.get(FrameHeader.DESTINATION_ENTRY_NAME);
+                String subscriptionId = (String) headers.get(FrameHeader.ID_ENTRY_NAME);
+                queueManager.addSubscription(makeSubscriptionUniqueId(subscriptionId), queueName, this);
+            } else if (command == Command.UNSUBSCRIBE) {
+                
+                String subscriptionId = (String) headers.get(FrameHeader.ID_ENTRY_NAME);
+                queueManager.removeSubscription(makeSubscriptionUniqueId(subscriptionId));
+            } else if (command == Command.ACK) {
+                
+                String subscriptionId = (String) headers.get(FrameHeader.SUBSCRIPTIONS_ENTRY_NAME);
+                queueManager.ackMessage(makeSubscriptionUniqueId(subscriptionId));
+            } else if (command == Command.NACK) {
+                
+                String subscriptionId = (String) headers.get(FrameHeader.SUBSCRIPTIONS_ENTRY_NAME);
+                queueManager.nakcMessage(makeSubscriptionUniqueId(subscriptionId));
+            } else {
+                transmit(Command.ERROR, null, "Cannot understand the command.");
+            }
+        } catch (QueueOperationException ex) {
+            transmit(Command.ERROR, null, ex.getMessage());
+        }
+    }
+
     @Override
     protected void receive(Frame frame) throws IOException {
         Command command = frame.getCommand();
         FrameHeader headers = frame.getHeader();
-        System.out.println("Frame headers: " + headers);
         if (command == Command.CONNECT) {
-            System.out.println("CONNECT received.");
-            String login = (String) headers.get("login");
-            String passcode = (String) headers.get("passcode");
-            try {
-                clientToken = Authenticator.connect(login, passcode);
-                FrameHeader header = new FrameHeader();
-                header.put("session", String.valueOf(this.hashCode()));
-                transmit(Command.CONNECTED, header, null);
-                setAuthenticated(true);
-                System.out.println("Authenticated.");
-            } catch (LoginException e) {
-                System.out.println("ERROR on connect.");
-                transmit(Command.ERROR, null, "Login failed: " + e.getMessage());
-            }
+            connect(headers);
         } else {
             if (!authenticated) {
-                System.out.println("Not Connected, or not authorized.");
-                transmit(new Frame(Command.ERROR, null, "Not Connected, or not authorized"));
+                transmit(new Frame(Command.ERROR, null, "Not connected, or not authorized"));
                 return;
             }
-
             if (command == Command.DISCONNECT) {
-                System.out.println("DISCONNECT received.");
-                if (headers != null) {
-                    String receipt = (String) headers.get("receipt");
-                    if (receipt != null) {
-                        FrameHeader header = new FrameHeader();
-                        header.put("receipt-id", receipt);
-                        transmit(Command.RECEIPT, header, null);
-                    }
-                }
+                disconnect(headers);
                 shutdown();
             } else if (command == Command.ERROR) {
                 transmit(Command.ERROR, headers, null);
             } else {
-                
-                QueueManager queueManager = QueueManager.getInstance();
-
-                if (command == Command.COMMIT || command == Command.ABORT || command == Command.BEGIN) {
-                    System.out.println("Transactions not supported yet.");
-                    transmit(Command.ERROR, null, "Transactions not supported yet.");
-                } else if (command == Command.SEND) {
-                    String destination = (String) headers.get("destination");
-                    Message message = getMessageFromFrame(frame);
-                    queueManager.addMessage(destination, message);
-                } else if (command == Command.SUBSCRIBE) {
-                    System.out.println("SUBSCRIBE received.");
-                    String queueName = (String) headers.get("destination");
-                    String subscriptionId = (String) headers.get("id");
-                    if (!queueManager.addSubscription(makeSubscriptionIdUnique(subscriptionId), queueName, this)) {
-                        transmit(Command.ERROR, null, "Cannot subscribe the queue with this headers: " + headers);
-                    }
-                } else if (command == Command.UNSUBSCRIBE) {
-                    System.out.println("UNSUBSCRIBE received.");
-                    String subscriptionId = (String) headers.get("id");
-                    queueManager.removeSubscription(makeSubscriptionIdUnique(subscriptionId));
-                } else if (command == Command.ACK) {
-                    System.out.println("ACK received.");
-                    String subscriptionId = (String) headers.get("subscription");
-                    queueManager.ackMessage(makeSubscriptionIdUnique(subscriptionId));
-                } else if (command == Command.NACK) {
-                    System.out.println("NACK received.");
-                    String subscriptionId = (String) headers.get("subscription");
-                    queueManager.nakcMessage(makeSubscriptionIdUnique(subscriptionId));
-                } else {
-                    transmit(Command.ERROR, null, "Cannot understand the command.");
-                }
+                handleFrame(frame);
             }
         }
     }
-    
-    private Message getMessageFromFrame(Frame frame) {
-        int maxRedeliveries = Integer.parseInt(frame.getHeader().get("max-redeliveries"));
+
+    private Message makeMessageFromFrame(Frame frame) {
+        int maxRedeliveries;
+        try {
+            String maxRedeliveriesEntry = frame.getHeader().get(FrameHeader.MAX_REDELIVERIES_ENTRY_NAME);
+            maxRedeliveries = Integer.parseInt(maxRedeliveriesEntry);
+        } catch (Exception e) {
+            maxRedeliveries = 0;
+        }
         return new Message(frame.getBody(), maxRedeliveries);
     }
-    
-    private String makeSubscriptionIdUnique(String subscriptionId) {
+
+    private String makeSubscriptionUniqueId(String subscriptionId) {
         if (subscriptionId == null) {
             subscriptionId = "0";
         }
@@ -120,10 +136,12 @@ public class SocketHandler extends AbstractReceiver implements QueueListener, Au
     private void transmit(Command command, FrameHeader header, String body) throws IOException {
         transmit(new Frame(command, header, body));
     }
-
+    
     @Override
     public void message(Message message) throws IOException {
-        transmit(Command.MESSAGE, null, (String) message.getContent());
+        FrameHeader headers = new FrameHeader();
+        headers.put(FrameHeader.DELIVERIES_COUNT_ENTRY_NAME, message.getDeliveryCount());
+        transmit(Command.MESSAGE, headers, (String) message.getContent());
     }
 
     @Override
@@ -135,12 +153,12 @@ public class SocketHandler extends AbstractReceiver implements QueueListener, Au
     public void setAuthenticated(boolean authenticated) {
         this.authenticated = authenticated;
     }
-    
+
     public void shutdown() throws IOException {
         interrupt();
         close();
     }
-    
+
     @Override
     public String toString() {
         InetAddress ia = clientSocket.getInetAddress();

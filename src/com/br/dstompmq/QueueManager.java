@@ -32,8 +32,6 @@ public class QueueManager extends Thread {
     @Override
     public void run() {
 
-        System.out.println("Queue manager just starts to run!");
-
         while (!isInterrupted()) {
 
             try {
@@ -50,7 +48,7 @@ public class QueueManager extends Thread {
         }
     }
 
-    public void addMessage(String queueName, Message message) {
+    public void addMessage(String queueName, Message message) throws QueueOperationException {
         Queue<Message> queue = queues.get(queueName);
         if (queue == null) {
             queue = createQueue();
@@ -82,9 +80,9 @@ public class QueueManager extends Thread {
         }
     }
 
-    public boolean addSubscription(String subscriptionId, String queueName, QueueListener subscriber) {
+    public void addSubscription(String subscriptionId, String queueName, QueueListener subscriber) throws QueueOperationException {
         if (subscriptionId == null || queueName == null || subscriber == null) {
-            return false;
+            throw new QueueOperationException("Null value not acceptable.");
         }
         Subscription subscription = subscriptions.get(subscriptionId);
         Queue<Message> queue = queues.get(queueName);
@@ -95,9 +93,9 @@ public class QueueManager extends Thread {
             }
             subscription = new Subscription(subscriber, queue);
             subscriptions.put(subscriptionId, subscription);
-            return true;
+        } else {
+            throw new QueueOperationException("Subscription ID already exists.");
         }
-        return false;
     }
 
     public void removeSubscription(String subscriptionId) {
@@ -109,7 +107,10 @@ public class QueueManager extends Thread {
         }
     }
 
-    private void addQueue(String name, Queue<Message> queue) {
+    private void addQueue(String name, Queue<Message> queue) throws QueueOperationException {
+        if (name == null || queue == null) {
+            throw new QueueOperationException("Null value not acceptable.");
+        }
         synchronized (queues) {
             queues.put(name, queue);
         }

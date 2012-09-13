@@ -1,7 +1,5 @@
 package com.br.dstompmq;
 
-import com.br.dstompmqui.JStompMQUI;
-
 /**
  *
  * @author dalmir

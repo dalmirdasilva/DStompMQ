@@ -4,8 +4,6 @@
  */
 package com.br.dstompmq;
 
-import java.util.Date;
-
 /**
  *
  * @author dalmir
