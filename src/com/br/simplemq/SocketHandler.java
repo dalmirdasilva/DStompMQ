@@ -1,8 +1,10 @@
-package com.br.dstompmq;
+package com.br.simplemq;
 
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
 import javax.security.auth.login.LoginException;
 
 public class SocketHandler extends AbstractReceiver implements QueueListener, Authenticatable {
@@ -11,11 +13,32 @@ public class SocketHandler extends AbstractReceiver implements QueueListener, Au
     private Object clientToken;
     private boolean authenticated = false;
     Socket clientSocket;
-
+    private static List<SocketHandlerEventListener> eventListeners;
+    
+    static {
+        eventListeners = new ArrayList<SocketHandlerEventListener>();
+    }
+    
     public SocketHandler(Socket clientSocket) throws IOException {
         super(clientSocket.getInputStream());
-        transmiter = new Transmiter(clientSocket.getOutputStream());
+        this.transmiter = new Transmiter(clientSocket.getOutputStream());
         this.clientSocket = clientSocket;
+    }
+    
+    public static void addEventListener(SocketHandlerEventListener listener) {
+        eventListeners.add(listener);
+    }
+    
+    private static void sendConnectEvent(SocketHandler instance) {
+        for (SocketHandlerEventListener listener : eventListeners) {
+            listener.onConnect(instance);
+        }
+    }
+    
+    private static void sendDisconnectEvent(SocketHandler instance) {
+        for (SocketHandlerEventListener listener : eventListeners) {
+            listener.onDisconnect(instance);
+        }
     }
 
     public void close() throws IOException {
@@ -33,6 +56,7 @@ public class SocketHandler extends AbstractReceiver implements QueueListener, Au
             header.put(FrameHeader.SESSION_ENTRY_NAME, String.valueOf(this.hashCode()));
             transmit(Command.CONNECTED, header, null);
             setAuthenticated(true);
+            sendConnectEvent(this);
         } catch (LoginException e) {
             transmit(Command.ERROR, null, e.getMessage());
         }
@@ -46,6 +70,7 @@ public class SocketHandler extends AbstractReceiver implements QueueListener, Au
                 header.put(FrameHeader.RECEIPT_ID_ENTRY_NAME, receipt);
                 transmit(Command.RECEIPT, header, null);
             }
+            sendDisconnectEvent(this);
         }
     }
 
@@ -57,10 +82,10 @@ public class SocketHandler extends AbstractReceiver implements QueueListener, Au
 
         try {
             if (command == Command.COMMIT || command == Command.ABORT || command == Command.BEGIN) {
-                
+
                 transmit(Command.ERROR, null, "Transactions are not supported yet.");
             } else if (command == Command.SEND) {
-              
+
                 String destination = (String) headers.get(FrameHeader.DESTINATION_ENTRY_NAME);
                 Message message = makeMessageFromFrame(frame);
                 queueManager.addMessage(destination, message);
@@ -70,15 +95,15 @@ public class SocketHandler extends AbstractReceiver implements QueueListener, Au
                 String subscriptionId = (String) headers.get(FrameHeader.ID_ENTRY_NAME);
                 queueManager.addSubscription(makeSubscriptionUniqueId(subscriptionId), queueName, this);
             } else if (command == Command.UNSUBSCRIBE) {
-                
+
                 String subscriptionId = (String) headers.get(FrameHeader.ID_ENTRY_NAME);
                 queueManager.removeSubscription(makeSubscriptionUniqueId(subscriptionId));
             } else if (command == Command.ACK) {
-                
+
                 String subscriptionId = (String) headers.get(FrameHeader.SUBSCRIPTIONS_ENTRY_NAME);
                 queueManager.ackMessage(makeSubscriptionUniqueId(subscriptionId));
             } else if (command == Command.NACK) {
-                
+
                 String subscriptionId = (String) headers.get(FrameHeader.SUBSCRIPTIONS_ENTRY_NAME);
                 queueManager.nakcMessage(makeSubscriptionUniqueId(subscriptionId));
             } else {
@@ -136,7 +161,7 @@ public class SocketHandler extends AbstractReceiver implements QueueListener, Au
     private void transmit(Command command, FrameHeader header, String body) throws IOException {
         transmit(new Frame(command, header, body));
     }
-    
+
     @Override
     public void message(Message message) throws IOException {
         FrameHeader headers = new FrameHeader();

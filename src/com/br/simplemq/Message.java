@@ -1,5 +1,5 @@
 
-package com.br.dstompmq;
+package com.br.simplemq;
 
 import java.util.Date;
 
@@ -58,6 +58,14 @@ public class Message {
 
     public int getDeliveryCount() {
         return deliveryCount;
+    }
+
+    public int getMaxRedeliveries() {
+        return maxRedeliveries;
+    }
+
+    public long getLastDeliveryTime() {
+        return lastDeliveryTime;
     }
     
     public boolean isMaxRedeliveriesReached() {

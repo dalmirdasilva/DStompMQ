@@ -1,4 +1,4 @@
-package com.br.dstompmq;
+package com.br.simplemq;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -12,7 +12,7 @@ import java.util.List;
  *
  * @author dalmir
  */
-public class ConnectionListener extends Thread {
+public class ConnectionListener extends Thread implements SocketHandlerEventListener {
 
     private ServerSocket serverSocket;
     private int port;
@@ -25,6 +25,8 @@ public class ConnectionListener extends Thread {
 
     @Override
     public void run() {
+        
+        SocketHandler.addEventListener(this);
         
         try {
             serverSocket = new ServerSocket(port);
@@ -53,23 +55,38 @@ public class ConnectionListener extends Thread {
     
     public void shutdown() throws IOException {
         interrupt();
-        serverSocket.close();
-        for (Iterator i = handlers.iterator(); i.hasNext();) {
-            try {
-                shutdownSocketHandler((SocketHandler) i.next());
-            } catch (Exception e) {
+        if (serverSocket != null) {
+            serverSocket.close();
+        }
+        if (handlers != null) {
+            for (Iterator i = handlers.iterator(); i.hasNext();) {
+                try {
+                    shutdownSocketHandler((SocketHandler) i.next());
+                } catch (Exception e) {
+                }
             }
         }
     }
     
     private void shutdownSocketHandler(SocketHandler handler) throws IOException {
         handler.shutdown();
-        synchronized (handlers) {
-            handlers.remove(handler);
+        if (handlers != null) {
+            synchronized (handlers) {
+                handlers.remove(handler);
+            }
         }
     }
 
     public List<SocketHandler> getHandlers() {
         return handlers;
+    }
+
+    @Override
+    public void onConnect(SocketHandler socket) {
+    }
+
+    @Override
+    public void onDisconnect(SocketHandler socket) {
+        handlers.remove(socket);
     }
 }

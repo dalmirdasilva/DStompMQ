@@ -1,9 +1,7 @@
-package com.br.dstompmq;
+package com.br.simplemq;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
 
 /**
@@ -15,7 +13,28 @@ public class QueueManager extends Thread {
     private static QueueManager instance;
     private Map<String, Subscription> subscriptions;
     private Map<String, Queue<Message>> queues;
-
+    private static List<QueueManagerEventListener> eventListeners;
+    
+    static {
+        eventListeners = new ArrayList<QueueManagerEventListener>();
+    }
+    
+    public static void addEventListener(QueueManagerEventListener listener) {
+        eventListeners.add(listener);
+    }
+    
+    private static void sendAddQueueEvent(String name) {
+        for (QueueManagerEventListener listener : eventListeners) {
+            listener.onAddQueue(name);
+        }
+    }
+    
+    private static void sendRemoveQueueEvent(String name) {
+        for (QueueManagerEventListener listener : eventListeners) {
+            listener.onRemoveQueue(name);
+        }
+    }    
+    
     private QueueManager() {
         subscriptions = new HashMap<String, Subscription>();
         queues = new HashMap<String, Queue<Message>>();
@@ -114,6 +133,7 @@ public class QueueManager extends Thread {
         synchronized (queues) {
             queues.put(name, queue);
         }
+        sendAddQueueEvent(name);
     }
 
     private Queue<Message> createQueue() {
@@ -132,13 +152,14 @@ public class QueueManager extends Thread {
         }
     }
 
-    public void removeQueue(String queueName) {
-        Queue queue = queues.get(queueName);
+    public void removeQueue(String name) {
+        Queue queue = queues.get(name);
         if (queue != null) {
             removeQueueSubscriptions(queue);
             synchronized (queues) {
-                queues.remove(queueName);
+                queues.remove(name);
             }
+            sendRemoveQueueEvent(name);
         }
     }
 
@@ -180,5 +201,13 @@ public class QueueManager extends Thread {
                 }
             }
         }
+    }
+
+    public Map<String, Queue<Message>> getQueues() {
+        return queues;
+    }
+
+    public Map<String, Subscription> getSubscriptions() {
+        return subscriptions;
     }
 }

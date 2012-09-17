@@ -1,4 +1,4 @@
-package com.br.dstompmq;
+package com.br.simplemq;
 
 /**
  *

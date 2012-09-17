@@ -1,6 +1,7 @@
 
-package com.br.dstompmq;
+package com.br.simplemq;
 
+import java.util.Iterator;
 import java.util.concurrent.ArrayBlockingQueue;
 
 /**
@@ -31,5 +32,10 @@ public class MemoryQueue<T> implements Queue<T> {
     @Override
     public int size() {
         return queue.size();
+    }
+
+    @Override
+    public Iterator<T> iterator() {
+        return queue.iterator();
     }
 }

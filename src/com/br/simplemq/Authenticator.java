@@ -1,5 +1,5 @@
 
-package com.br.dstompmq;
+package com.br.simplemq;
 
 import javax.security.auth.login.LoginException;
 

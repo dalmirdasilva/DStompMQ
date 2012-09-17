@@ -1,4 +1,4 @@
-package com.br.dstompmq;
+package com.br.simplemq;
 
 import java.io.BufferedReader;
 import java.io.IOException;
